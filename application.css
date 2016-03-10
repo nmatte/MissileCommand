@@ -12,6 +12,12 @@ canvas:hover {
   cursor: crosshair;
 }
 
+p {
+  text-align: center;
+  font-family: monospace;
+  margin: 0px;
+}
+
 article {
   margin: auto;
   height: 100%;

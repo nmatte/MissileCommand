@@ -58,7 +58,7 @@
 
 	function GameView(game, canvas) {
 	    this.game = game;
-	    canvas.font = "36px";
+
 	    canvas.addEventListener('click', function (event) {
 	      this.game.clickAt(event.layerX, event.layerY);
 	    }.bind(this));
@@ -74,6 +74,8 @@
 
 	  requestAnimationFrame(step);
 	};
+
+
 
 	module.exports = GameView;
 
