@@ -58,7 +58,7 @@
 
 	function GameView(game, canvas) {
 	    this.game = game;
-
+	    canvas.font = "36px";
 	    canvas.addEventListener('click', function (event) {
 	      this.game.clickAt(event.layerX, event.layerY);
 	    }.bind(this));
@@ -86,21 +86,25 @@
 	    Missile = __webpack_require__(6),
 	    City = __webpack_require__(7);
 
+	var GROUND_LEVEL = 30;
 	var Game = function () {
 	  this.scuds = [];
 	  this.missiles = [];
 	  this.cities = [];
 	  this.xBound = 640;
 	  this.yBound = 480;
+	  this.score = 0;
+	  this.difficulty = 1;
+	  this.missilesRemaining = 15;
+	  this.origin = {x: this.xBound / 2, y: this.yBound - GROUND_LEVEL};
 	  this.spawnCities();
 	  this.spawnMissileWave(true);
 	};
 
-	Game.prototype.GROUND_LEVEL = 30;
 
 	Game.prototype.clickAt = function (x, y) {
 	  console.log("x, y", x, y);
-	  var origin = {x: this.xBound / 2, y: this.yBound - this.GROUND_LEVEL};
+	  var origin = this.origin;
 	  var dest = {x: x, y: y};
 
 	  var provideMissiles = function () {
@@ -112,16 +116,27 @@
 
 	Game.prototype.onScudFinish = function (scud) {
 	  this.scuds.splice(this.scuds.indexOf(scud), 1);
+	  this.score += scud.points;
 	};
 
 	Game.prototype.onMissileFinish = function (missile) {
+	  if (missile.destroyedTarget) {
+	    var city = this.cities.find(
+	      function (someCity) {
+	        return someCity.location.x === missile.dest.x;
+	      }
+	    );
+
+	    if (city) {
+	      city.destroy();
+	    }
+	  }
 	  this.missiles.splice(this.missiles.indexOf(missile), 1);
 	  this.spawnMissileWave();
-
 	};
 
 	Game.prototype.spawnCities = function () {
-	  var y = this.yBound - this.GROUND_LEVEL;
+	  var y = this.yBound - GROUND_LEVEL;
 	  var interval = this.xBound / 8;
 	  for (var i = 0; i < 6; i++) {
 	    var x;
@@ -130,28 +145,48 @@
 	    } else {
 	      x = this.xBound - interval * (6 - i);
 	    }
-	    this.cities.push(new City({x: x, y: y}));
+	    x += interval / 2;
+	    var coords = {x: x, y: y};
+	    this.cities.push(new City(coords));
 	  }
 	};
 
 	Game.prototype.draw = function (ctx) {
 	  ctx.clearRect(0, 0, this.xBound, this.yBound);
 	  this.drawSky(ctx);
+	  this.drawCities(ctx);
 	  this.drawMissiles(ctx);
 	  this.drawScuds(ctx);
 
 	  ctx.fillStyle = 'black';
 	  ctx.fillRect(0, this.yBound - 30, this.xBound, 30);
-	  this.drawCities(ctx);
+	  ctx.fillStyle = "white";
+	  ctx.font = "24px monospace";
+	  ctx.fillText("Score: " + this.score, 20, 40);
+	  var levelText = "Level " + this.difficulty;
+	  var width = ctx.measureText(levelText).width;
+
+	  ctx.fillText(levelText, this.xBound - (width + 20), 40);
 	};
 
 	Game.prototype.step = function () {
 	  this.stepScuds();
 	  this.stepMissiles();
+	  if (this.missilesRemaining <= 0) {
+	    this.stepDifficulty();
+	  }
 	};
 
 	var maxMissiles = 3;
-	var maxTotal = 8;
+	var maxTotal = 5;
+
+	Game.prototype.stepDifficulty = function () {
+	  this.difficulty += 1;
+	  maxMissiles += 1;
+	  maxTotal += 2;
+	  this.missilesRemaining = 15 + this.difficulty * 3;
+	};
+
 	Game.prototype.spawnMissileWave = function (force) {
 	  var numTimes = Math.ceil(Math.random() * maxMissiles);
 	  if (force) {
@@ -159,10 +194,21 @@
 	  }
 
 	  if (this.missiles.length < maxTotal) {
-	    var target = {x: this.xBound / 2, y: this.yBound - 30};
-	    var missOrigin = {x: this.xBound * Math.random(), y: 0};
+	    var targets = [this.origin];
+	    for (var i = 0; i < this.cities.length; i++) {
+	      if (!this.cities[i].isDestroyed) {
+	        targets.push(this.cities[i].location);
+	      }
+	    }
+	    var randIndex = Math.floor(Math.random() * targets.length);
+	    var target = targets[randIndex];
+	    if(!target) {
+	      target = this.origin;
+	    }
 	    for (var i = 0; i < numTimes; i++) {
+	      var missOrigin = {x: this.xBound * Math.random(), y: 0};
 	      this.missiles.push(new Missile(missOrigin, target, this.onMissileFinish.bind(this)));
+	      this.missilesRemaining -=1;
 	    }
 
 	  }
@@ -220,6 +266,7 @@
 	var Scud = function (origin, dest, onFinish, getMissiles) {
 	  Projectile.call(this, origin, dest, onFinish);
 	  this.getMissiles = getMissiles;
+	  this.points = 0;
 	};
 
 	Util.prototype.inherits(Scud, Projectile);
@@ -245,6 +292,7 @@
 	};
 
 	Scud.prototype.destroyMissiles = function () {
+	  var numMissiles = 0;
 	  if (this.isExploding) {
 	    this.getMissiles().forEach(
 	      function (missile) {
@@ -254,11 +302,16 @@
 	        var yDiff = missile.pos.y - this.pos.y;
 
 	        if (Math.hypot(xDiff, yDiff) < radius) {
+	          if (!missile.isDestroyed) {
+	            numMissiles += 1;
+	          }
 	          missile.destroy();
+
 	        }
 	      }.bind(this)
 	    );
 	  }
+	  this.points += numMissiles * 100;
 	};
 
 	Scud.prototype.draw = function (ctx) {
@@ -385,6 +438,8 @@
 	    Projectile = __webpack_require__(4);
 
 	var Missile = function (origin, dest, onFinish) {
+	  this.destroyedTarget = false;
+	  this.isDestroyed = false;
 	  Projectile.call(this, origin, dest, onFinish);
 	};
 
@@ -395,43 +450,28 @@
 
 	Missile.prototype.step = function () {
 	  if (this.atDest()) {
-	    this.destroy();
+	    this.destroyedTarget = true;
+	    this.explode();
 	  }
 	  //
-	  // if (this.isExploding) {
-	  //   if (this.explodeProgress > 1.0) {
-	  //     this.finish();
-	  //   } else {
-	  //     this.explodeProgress += 0.025;
-	  //   }
-	  // } else {
+	  if (this.isExploding) {
+	    if (this.explodeProgress > 1.0) {
+	      this.finish();
+	    } else {
+	      this.explodeProgress += 0.015;
+	    }
+	  } else {
 	    var stuff = this.angToCartesian(this.angle, this.SPEED);
 	    this.pos.x -= stuff.x;
 	    this.pos.y -= stuff.y;
-	  // }
+	  }
 	};
 
 
 	Missile.prototype.draw = function (ctx) {
-	  // if (this.isExploding) {
-	  //   ctx.beginPath();
-	  //   if (this.explodeProgress <= 0.2) {
-	  //     ctx.fillStyle = 'rgb(255, 159, 10)';
-	  //   } else if (this.explodeProgress <= 0.4) {
-	  //     ctx.fillStyle = 'rgb(232, 114, 10)';
-	  //   } else if (this.explodeProgress <= 0.6) {
-	  //     ctx.fillStyle = 'rgb(255, 211, 66)';
-	  //   } else if (this.explodeProgress <= 0.8) {
-	  //     ctx.fillStyle = 'rgb(232, 49, 10)';
-	  //   } else {
-	  //     // ctx.fillStyle = 'rgb(255, 18, 10)';
-	  //     ctx.fillStyle = 'rgb(255, 211, 66)';
-	  //
-	  //   }
-	  //   ctx.arc(this.pos.x, this.pos.y, this.getRadiusFromProgress(this.explodeProgress), 0, Math.PI * 2);
-	  //   ctx.fill();
-	  //   ctx.fillStyle = 'black';
-	  // } else {
+	  if (this.isExploding) {
+	    this.drawMushroomCloud(ctx);
+	  } else {
 	  ctx.strokeStyle = 'rgb(232, 45, 10)';
 	  ctx.fillStyle = "white";
 	  ctx.lineWidth = 2;
@@ -443,7 +483,70 @@
 
 	    ctx.fillRect(this.pos.x - 1, this.pos.y - 1, 2, 2);
 	    ctx.fillStyle = 'black';
-	  // }
+	  }
+	};
+
+	Missile.prototype.drawMushroomCloud = function (ctx) {
+	  if (this.explodeProgress <= 0.2) {
+	    ctx.fillStyle = 'rgb(230,230,230)';
+	  } else if (this.explodeProgress <= 0.4) {
+	    ctx.fillStyle = 'rgb(232, 114, 10)';
+	    var top = this.drawMushroomTop(ctx);
+	    this.drawMushroomStalk(ctx, top);
+	  } else if (this.explodeProgress <= 0.6) {
+	    ctx.fillStyle = 'rgb(230,230,230)';
+	    var top = this.drawMushroomTop(ctx);
+	    this.drawMushroomStalk(ctx, top);
+	  } else if (this.explodeProgress <= 0.8) {
+	    ctx.fillStyle = 'rgb(232, 49, 10)';
+	    var top = this.drawMushroomTop(ctx);
+	    this.drawMushroomStalk(ctx, top);
+	  } else {
+	    // ctx.fillStyle = 'rgb(255, 18, 10)';
+	    ctx.fillStyle = 'rgb(230,230,230)';
+	    var top = this.drawMushroomTop(ctx);
+	    this.drawMushroomStalk(ctx, top);
+	  }
+
+
+	  ctx.beginPath();
+	  ctx.moveTo(this.pos.x, this.pos.y);
+	  ctx.arc(this.pos.x, this.pos.y, 25, Math.PI, 0);
+	  ctx.fill();
+	};
+
+	Missile.prototype.drawMushroomStalk = function (ctx, top) {
+	  var startY = top + 4;
+	  var bottomLeft = {x: this.pos.x - 5, y: this.pos.y};
+	  var topLeft = {x: bottomLeft.x, y: startY};
+	  var bottomRight = {x: this.pos.x + 5, y: this.pos.y};
+	  var topRight = {x: bottomRight.x, y: startY};
+	  // ctx.fillRect(this.pos.x - 5, startY, 10, Math.abs(top - this.pos.y));
+	  ctx.beginPath();
+	  ctx.moveTo(bottomLeft.x, bottomLeft.y);
+	  ctx.lineTo(topLeft.x, topLeft.y);
+	  ctx.bezierCurveTo(topLeft.x, top, topRight.x, top, topRight.x, topRight.y);
+	  ctx.lineTo(bottomRight.x, bottomRight.y);
+	  ctx.fill();
+	};
+
+	Missile.prototype.drawMushroomTop = function (ctx) {
+	  var progressDiff = Math.min(this.explodeProgress * 30 + 5, 15);
+	  var pointLeft = {x: this.pos.x - progressDiff, y: this.pos.y - progressDiff * 2};
+	  var pointRight = {x: this.pos.x + progressDiff, y: this.pos.y - progressDiff * 2};
+	  ctx.beginPath();
+	  ctx.moveTo(pointLeft.x, pointLeft.y);
+	  var ctrlLeft = {x: pointLeft.x - 10, y: pointLeft.y - (10 + progressDiff)};
+	  var ctrlRight = {x: pointRight.x + 10, y: pointRight.y - (10 + progressDiff)};
+	  ctx.bezierCurveTo(ctrlLeft.x - 10, ctrlLeft.y, ctrlRight.x + 10, ctrlRight.y, pointRight.x, pointRight.y);
+
+	  var ctrlLeft2 = {x: pointLeft.x - 3, y: pointLeft.y - 7};
+	  var ctrlRight2 = {x: pointRight.x + 3 , y: pointRight.y - 7};
+	  ctx.bezierCurveTo(ctrlLeft2.x, ctrlLeft2.y, ctrlRight2.x, ctrlRight2.y, pointLeft.x, pointLeft.y);
+	  // ctx.arc(this.pos.x, this.pos.y - this.explodeProgress * 7, this.explodeProgress * 25, Math.PI * 1, 0);
+	  // ctx.arc(this.pos.x, this.pos.y - this.explodeProgress * 10, this.explodeProgress * 30, Math.PI * 1, 0);
+	  ctx.fill();
+	  return pointLeft.y;
 	};
 
 
@@ -456,6 +559,7 @@
 	};
 
 	Missile.prototype.destroy = function () {
+	  this.isDestroyed = true;
 	  this.finish();
 	};
 
@@ -468,6 +572,8 @@
 
 	var City = function (location) {
 	  this.location = location;
+	  this.isDestroyed = false;
+	  this.rubblePoints = [];
 	};
 
 	City.prototype.WIDTH = 40;
@@ -476,7 +582,39 @@
 
 	City.prototype.draw = function (ctx) {
 	  ctx.fillStyle = "purple";
-	  ctx.fillRect(this.location.x + this.WIDTH / 2, this.location.y - this.HEIGHT, this.WIDTH, this.HEIGHT);
+	  if (this.isDestroyed) {
+	    this.drawRubble(ctx);
+	  } else {
+	    ctx.fillRect(this.location.x - this.WIDTH / 2, this.location.y - this.HEIGHT, this.WIDTH, this.HEIGHT);
+	  }
+	};
+
+	City.prototype.destroy = function () {
+	  this.isDestroyed = true;
+	  this.makeRubblePoints();
+	};
+
+	City.prototype.makeRubblePoints = function () {
+	  if (this.rubblePoints.length === 0){
+	    for (var i = 0; i < 6; i++) {
+	      var rX = Math.random() * this.WIDTH + this.location.x;
+	      var rY = this.location.y - Math.random() * this.HEIGHT;
+	      this.rubblePoints.push({x: rX, y: rY});
+	    }
+	  }
+	  return this.rubblePoints;
+	};
+
+	City.prototype.drawRubble = function (ctx) {
+	  ctx.beginPath();
+	  ctx.moveTo(this.location.x, this.location.y);
+	  for (var j = 0; j < this.rubblePoints.length; j++) {
+	    var x = this.rubblePoints[j].x;
+	    var y = this.rubblePoints[j].y;
+	    ctx.lineTo(x, y);
+	    ctx.lineTo(x, this.location.y);
+	  }
+	  ctx.fill();
 	};
 
 	module.exports = City;
