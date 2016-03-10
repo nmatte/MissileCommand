@@ -96,12 +96,20 @@
 	  console.log("x, y", x, y);
 	  var origin = {x: this.xBound / 2, y: this.yBound - 30};
 	  var dest = {x: x, y: y};
-	  this.scuds.push(new Scud(origin, dest, this.onScudFinish.bind(this)));
+
+	  var provideMissiles = function () {
+	    return this.missiles;
+	  }.bind(this);
+
+	  this.scuds.push(new Scud(origin, dest, this.onScudFinish.bind(this), provideMissiles));
 	};
 
 	Game.prototype.onScudFinish = function (scud) {
-	  console.log(scud);
 	  this.scuds.splice(this.scuds.indexOf(scud), 1);
+	};
+
+	Game.prototype.onMissileFinish = function (missile) {
+	  this.missiles.splice(this.missiles.indexOf(missile), 1);
 	};
 
 	Game.prototype.draw = function (ctx) {
@@ -120,17 +128,14 @@
 	  this.stepMissiles();
 	};
 
+	var likelihood = 400;
 	Game.prototype.spawnMissileWave = function () {
-	  var numTimes = Math.max(Math.floor(Math.random() * 12) - 6, 0);
+	  var numTimes = Math.max(Math.floor(Math.random() * likelihood + 8) - likelihood, 0);
 	  var target = {x: this.xBound / 2, y: this.yBound - 30};
 	  var missOrigin = {x: this.xBound * Math.random(), y: 0};
 	  for (var i = 0; i < numTimes; i++) {
-	    this.missiles.push(new Missile(missOrigin, target, new function () {
-	      console.log("done");
-	    }));
+	    this.missiles.push(new Missile(missOrigin, target, this.onMissileFinish.bind(this)));
 	  }
-
-
 	};
 
 	Game.prototype.stepScuds = function () {
@@ -176,8 +181,9 @@
 
 	var Projectile = __webpack_require__(4);
 	var Util = __webpack_require__(5);
-	var Scud = function (origin, dest, onFinish) {
+	var Scud = function (origin, dest, onFinish, getMissiles) {
 	  Projectile.call(this, origin, dest, onFinish);
+	  this.getMissiles = getMissiles;
 	};
 
 	Util.prototype.inherits(Scud, Projectile);
@@ -192,12 +198,30 @@
 	    if (this.explodeProgress > 1.0) {
 	      this.finish();
 	    } else {
+	      this.destroyMissiles();
 	      this.explodeProgress += 0.025;
 	    }
 	  } else {
 	    var stuff = this.angToCartesian(this.angle, this.SPEED);
 	    this.pos.x -= stuff.x;
 	    this.pos.y -= stuff.y;
+	  }
+	};
+
+	Scud.prototype.destroyMissiles = function () {
+	  if (this.isExploding) {
+	    this.getMissiles().forEach(
+	      function (missile) {
+
+	        var radius = this.getRadiusFromProgress(this.explodeProgress);
+	        var xDiff = missile.pos.x - this.pos.x;
+	        var yDiff = missile.pos.y - this.pos.y;
+
+	        if (Math.hypot(xDiff, yDiff) < radius) {
+	          missile.destroy();
+	        }
+	      }.bind(this)
+	    );
 	  }
 	};
 
@@ -331,12 +355,12 @@
 	Util.prototype.inherits(Missile, Projectile);
 
 
-	Missile.prototype.SPEED = 2;
+	Missile.prototype.SPEED = 1;
 
 	Missile.prototype.step = function () {
-	  // if (this.atDest()) {
-	  //   this.explode();
-	  // }
+	  if (this.atDest()) {
+	    this.destroy();
+	  }
 	  //
 	  // if (this.isExploding) {
 	  //   if (this.explodeProgress > 1.0) {
@@ -374,31 +398,31 @@
 	  // } else {
 	  ctx.strokeStyle = 'rgb(232, 45, 10)';
 	  ctx.fillStyle = "white";
+	  ctx.lineWidth = 2;
 	  ctx.beginPath();
 	  ctx.moveTo(this.origin.x, this.origin.y);
 
 	  ctx.lineTo(this.pos.x, this.pos.y);
 	  ctx.stroke();
 
-	    ctx.fillRect(this.pos.x, this.pos.y, 5, 5);
+	    ctx.fillRect(this.pos.x - 1, this.pos.y - 1, 2, 2);
 	    ctx.fillStyle = 'black';
 	  // }
 	};
 
 
 	Missile.prototype.atDest = function () {
-	  // var isLeft = false;
-	  // if (this.angle / Math.PI <= 0.5) {
-	  //   isLeft = true;
-	  //   return this.pos.x < this.dest.x && this.pos.y < this.dest.y;
-	  // }
-	  //
-	  // return this.pos.x > this.dest.x && this.pos.y < this.dest.y;
+	  return (this.dest.y < this.pos.y);
 	};
 
 	Missile.prototype.finish = function () {
 	  this.onFinish(this);
 	};
+
+	Missile.prototype.destroy = function () {
+	  this.finish();
+	};
+
 	module.exports = Missile;
 
 
