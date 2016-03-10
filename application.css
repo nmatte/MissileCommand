@@ -1,0 +1,18 @@
+body {
+  background-color: #ccc;
+}
+
+canvas {
+  background: white;
+  margin: 50px auto;
+  display: block;
+}
+
+canvas:hover {
+  cursor: crosshair;
+}
+
+article {
+  margin: auto;
+  height: 100%;
+}
