@@ -83,18 +83,24 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	var Scud = __webpack_require__(3),
-	    Missile = __webpack_require__(6);
+	    Missile = __webpack_require__(6),
+	    City = __webpack_require__(7);
 
 	var Game = function () {
 	  this.scuds = [];
 	  this.missiles = [];
+	  this.cities = [];
 	  this.xBound = 640;
 	  this.yBound = 480;
+	  this.spawnCities();
+	  this.spawnMissileWave(true);
 	};
+
+	Game.prototype.GROUND_LEVEL = 30;
 
 	Game.prototype.clickAt = function (x, y) {
 	  console.log("x, y", x, y);
-	  var origin = {x: this.xBound / 2, y: this.yBound - 30};
+	  var origin = {x: this.xBound / 2, y: this.yBound - this.GROUND_LEVEL};
 	  var dest = {x: x, y: y};
 
 	  var provideMissiles = function () {
@@ -110,31 +116,55 @@
 
 	Game.prototype.onMissileFinish = function (missile) {
 	  this.missiles.splice(this.missiles.indexOf(missile), 1);
+	  this.spawnMissileWave();
+
+	};
+
+	Game.prototype.spawnCities = function () {
+	  var y = this.yBound - this.GROUND_LEVEL;
+	  var interval = this.xBound / 8;
+	  for (var i = 0; i < 6; i++) {
+	    var x;
+	    if (i < 3) {
+	      x = interval * i;
+	    } else {
+	      x = this.xBound - interval * (6 - i);
+	    }
+	    this.cities.push(new City({x: x, y: y}));
+	  }
 	};
 
 	Game.prototype.draw = function (ctx) {
 	  ctx.clearRect(0, 0, this.xBound, this.yBound);
-	  ctx.fillStyle = 'black';
 	  this.drawSky(ctx);
 	  this.drawMissiles(ctx);
 	  this.drawScuds(ctx);
 
+	  ctx.fillStyle = 'black';
 	  ctx.fillRect(0, this.yBound - 30, this.xBound, 30);
+	  this.drawCities(ctx);
 	};
 
 	Game.prototype.step = function () {
-	  this.spawnMissileWave();
 	  this.stepScuds();
 	  this.stepMissiles();
 	};
 
-	var likelihood = 400;
-	Game.prototype.spawnMissileWave = function () {
-	  var numTimes = Math.max(Math.floor(Math.random() * likelihood + 8) - likelihood, 0);
-	  var target = {x: this.xBound / 2, y: this.yBound - 30};
-	  var missOrigin = {x: this.xBound * Math.random(), y: 0};
-	  for (var i = 0; i < numTimes; i++) {
-	    this.missiles.push(new Missile(missOrigin, target, this.onMissileFinish.bind(this)));
+	var maxMissiles = 3;
+	var maxTotal = 8;
+	Game.prototype.spawnMissileWave = function (force) {
+	  var numTimes = Math.ceil(Math.random() * maxMissiles);
+	  if (force) {
+	    numTimes = Math.max(Math.ceil(Math.random() * maxMissiles));
+	  }
+
+	  if (this.missiles.length < maxTotal) {
+	    var target = {x: this.xBound / 2, y: this.yBound - 30};
+	    var missOrigin = {x: this.xBound * Math.random(), y: 0};
+	    for (var i = 0; i < numTimes; i++) {
+	      this.missiles.push(new Missile(missOrigin, target, this.onMissileFinish.bind(this)));
+	    }
+
 	  }
 	};
 
@@ -159,6 +189,12 @@
 	Game.prototype.drawMissiles = function (ctx) {
 	  for (var i = 0; i < this.missiles.length; i++) {
 	    this.missiles[i].draw(ctx);
+	  }
+	};
+
+	Game.prototype.drawCities = function (ctx) {
+	  for (var i = 0; i < this.cities.length; i++) {
+	    this.cities[i].draw(ctx);
 	  }
 	};
 
@@ -424,6 +460,26 @@
 	};
 
 	module.exports = Missile;
+
+
+/***/ },
+/* 7 */
+/***/ function(module, exports) {
+
+	var City = function (location) {
+	  this.location = location;
+	};
+
+	City.prototype.WIDTH = 40;
+
+	City.prototype.HEIGHT = 15;
+
+	City.prototype.draw = function (ctx) {
+	  ctx.fillStyle = "purple";
+	  ctx.fillRect(this.location.x + this.WIDTH / 2, this.location.y - this.HEIGHT, this.WIDTH, this.HEIGHT);
+	};
+
+	module.exports = City;
 
 
 /***/ }
