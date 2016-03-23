@@ -432,8 +432,9 @@
 	    ctx.fill();
 	    ctx.fillStyle = 'black';
 	  } else {
-	    ctx.fillStyle = 'rgb(255, 254, 130)';
-	    ctx.fillRect(this.pos.x, this.pos.y, 5, 5);
+	    ctx.fillStyle = 'rgb(255, 254, 255)';
+	    var sideLength = 5;
+	    ctx.fillRect(this.pos.x - sideLength / 2, this.pos.y - sideLength / 2, sideLength, sideLength);
 	    ctx.fillStyle = 'black';
 	  }
 	};
