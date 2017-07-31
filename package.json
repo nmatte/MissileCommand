@@ -1,0 +1,20 @@
+{
+  "name": "missile-command",
+  "version": "0.1.0",
+  "description": "A missile command game.",
+  "main": "bundle.js",
+  "scripts": {
+    "test": "webpack"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nmatte/MissileCommand.git"
+  },
+  "author": "Nathan Matteson",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/nmatte/MissileCommand/issues"
+  },
+  "homepage": "https://github.com/nmatte/MissileCommand#readme",
+  "dependencies": {}
+}
